@@ -108,15 +108,15 @@ app.get("/lendings/book/:bookId", async (req, res) => {
 
 // Analytics Endpoint
 app.get("/analytics", async (req, res) => {
-  const lendings = await prisma.lending.findMany({
+  const bookLendings = await prisma.book.findMany({
     include: {
-      book: true,
-    }
+      lendings: true,
+    },
   });
-  const analytics = lendings.map((lending) => ({
-    title: lending.book.title,
-    totalLent: lendings.length,
-    remaining: lending.book.quantity - lendings.length,
+  const analytics = bookLendings.map((book) => ({
+    title: book.title,
+    totalLent: book.lendings.length,
+    remaining: book.quantity - book.lendings.length,
   }));
   res.send(analytics);
 });
