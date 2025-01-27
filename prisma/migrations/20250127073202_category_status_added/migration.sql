@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `Category` ADD COLUMN `status` VARCHAR(191) NOT NULL DEFAULT 'ACTIVE';
