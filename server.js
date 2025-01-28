@@ -15,8 +15,8 @@ const PORT = 3030;
 // Enable CORS for all routes
 app.register(fastifyCors);
 
-// Member Registration
-app.post("/member/register", async (req, res) => {
+// Admin Registration
+app.post("/users", async (req, res) => {
   const { username, email, password } = req.body;
   const userExists = await prisma.user.findUnique({
     where: { email },
@@ -24,7 +24,7 @@ app.post("/member/register", async (req, res) => {
   if (userExists) {
     return res.code(400).send({
       success: false,
-      message: "Member already exists. Registration is failed!",
+      message: "User already exists. Registration is failed!",
     });
   }
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -33,23 +33,154 @@ app.post("/member/register", async (req, res) => {
       name: username,
       email: email,
       password: hashedPassword,
+      role: "ADMIN",
     },
   });
 
-  const member = await prisma.member.create({
-    data: {
-      userId: user.id,
-      status: "ACTIVE",
-    },
-  });
-
-  res
-    .code(201)
-    .send({ success: true, message: "Member is registered", member });
+  res.code(201).send({ success: true, message: "User is created" });
 });
 
-// Member Login
-app.post("/member/login", async (req, res) => {
+// Member Registration
+app.post("/members", async (req, res) => {
+  const { name, email, status } = req.body;
+  const userExists = await prisma.user.findUnique({
+    where: { email },
+  });
+  if (userExists) {
+    const memberExists = await prisma.member.findUnique({
+      where: {
+        userId: userExists.id,
+        status: {
+          in: ["ACTIVE", "DRAFT"],
+        },
+      },
+    });
+    if (memberExists) {
+      return res.code(400).send({
+        success: false,
+        message: "Member already exists. Registration is failed!",
+      });
+    }
+  }
+  const hashedPassword = await bcrypt.hash(email, 10);
+  const user = await prisma.user.create({
+    data: {
+      name: name,
+      email: email,
+      password: hashedPassword,
+      role: "MEMBER",
+    },
+  });
+
+  await prisma.member.create({
+    data: {
+      userId: user.id,
+      status: status,
+    },
+  });
+
+  res.code(201).send({ success: true, message: "Member is registered" });
+});
+
+// List of Members
+app.get("/members", async (req, res) => {
+  const members = await prisma.member.findMany({
+    where: {
+      status: {
+        in: ["ACTIVE", "DRAFT"],
+      },
+    },
+    select: {
+      id: true,
+      status: true,
+      joinedDate: true,
+      user: {
+        select: {
+          email: true,
+          name: true,
+        },
+      },
+    },
+  });
+  res.code(201).send({ success: true, members: members });
+});
+
+// Update Member
+app.put("/members/:id", async (req, res) => {
+  const { id } = req.params;
+  const { name, email, status } = req.body;
+  const memberData = await prisma.member.findUnique({
+    where: { id: parseInt(id) },
+    include: {
+      user: true,
+    },
+  });
+  if (memberData.user.email != email) {
+    const userExists = await prisma.user.findUnique({
+      where: { email },
+    });
+    if (userExists) {
+      const memberExists = await prisma.member.findUnique({
+        where: {
+          userId: userExists.id,
+          status: {
+            in: ["ACTIVE", "DRAFT"],
+          },
+          NOT: {
+            id: memberData.id,
+          },
+        },
+      });
+      if (memberExists) {
+        return res.code(400).send({
+          success: false,
+          message: `Email: ${email} already exists. Updating member is failed!`,
+        });
+      }
+    }
+  }
+  await prisma.member.update({
+    where: { id: parseInt(id) },
+    data: {
+      status: status,
+    },
+  });
+  await prisma.user.update({
+    where: {
+      id: memberData.userId,
+    },
+    data: {
+      name: name,
+      email: email,
+    },
+  });
+  res.code(201).send({ success: true });
+});
+
+// Delete a Member
+app.delete("/members/:id", async (req, res) => {
+  const { id } = req.params;
+  const member = await prisma.member.findUnique({
+    where: { id: parseInt(id) },
+    include: {
+      user,
+    },
+  });
+  if (!member) {
+    return res.code(400).send({ success: false, message: "Member not found!" });
+  }
+  await prisma.user.delete({
+    where: { id: member.userId },
+  });
+
+  await prisma.member.delete({
+    where: { id: parseInt(id) },
+  });
+  res.code(201).send({ success: true });
+});
+
+// Admin Login
+app.post("/admin/login", async (req, res) => {
   const { email, password } = req.body;
   const user = await prisma.user.findUnique({
     where: { email: email },
@@ -60,6 +191,9 @@ app.post("/member/login", async (req, res) => {
       message: "Invalid login credentials!",
     });
   }
+  if (user.role != "ADMIN")
+    return res.code(401).send({ success: false, message: "Unathorized user!" });
+
   const matchedPassword = await bcrypt.compare(password, user.password);
   if (!matchedPassword) {
     return res.code(400).send({
