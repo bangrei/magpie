@@ -286,7 +286,22 @@ app.post("/books", async (req, res) => {
 
 // Get all Books
 app.get("/books", async (req, res) => {
+  const { keyword } = req.query;
   const books = await prisma.book.findMany({
+    where: {
+      OR: [
+        {
+          title: {
+            contains: keyword,
+          },
+        },
+        {
+          author: {
+            contains: keyword,
+          },
+        },
+      ],
+    },
     select: {
       id: true,
       title: true,
@@ -349,11 +364,12 @@ app.delete("/books/:id", async (req, res) => {
 
 // Record a Lending transaction
 app.post("/lendings", async (req, res) => {
-  const { bookId, borrower } = req.body;
+  const { bookId, memberId, quantity } = req.body;
   const lending = await prisma.lending.create({
     data: {
       bookId,
-      borrower,
+      memberId,
+      quantity,
     },
   });
   res.code(201).send({ success: true, lending: lending });
@@ -364,6 +380,12 @@ app.get("/lendings", async (req, res) => {
   const lendings = await prisma.lending.findMany({
     include: {
       book: true,
+    },
+    where: {
+      status: "ACTIVE",
+    },
+    orderBy: {
+      borrowDate: "desc",
     },
   });
   res.code(201).send({ success: true, lendings: lendings });
@@ -376,6 +398,24 @@ app.get("/lendings/book/:bookId", async (req, res) => {
     where: { bookId: parseInt(bookId) },
     include: {
       book: true,
+    },
+    orderBy: {
+      borrowDate: "desc",
+    },
+  });
+  res.code(201).send({ success: true, lendings: lendings });
+});
+
+// Get Lending records by Member ID
+app.get("/lendings/member/:memberId", async (req, res) => {
+  const { memberId } = req.params;
+  const lendings = await prisma.lending.findMany({
+    where: { memberId: parseInt(memberId) },
+    include: {
+      book: true,
+    },
+    orderBy: {
+      borrowDate: "desc",
     },
   });
   res.code(201).send({ success: true, lendings: lendings });
