@@ -162,19 +162,17 @@ app.delete("/members/:id", async (req, res) => {
   const { id } = req.params;
   const member = await prisma.member.findUnique({
     where: { id: parseInt(id) },
-    include: {
-      user,
-    },
   });
   if (!member) {
     return res.code(400).send({ success: false, message: "Member not found!" });
   }
-  await prisma.user.delete({
-    where: { id: member.userId },
-  });
 
   await prisma.member.delete({
     where: { id: parseInt(id) },
+  });
+
+  await prisma.user.delete({
+    where: { id: member.userId },
   });
   res.code(201).send({ success: true });
 });
